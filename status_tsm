@@ -16,7 +16,7 @@ DATE=`date "+%m/%d/%Y"`
 TSM_DIR=/opt/tivoli/tsm/client/ba/bin
 TSMLOG=${TSM_DIR}/dsmsched.log
 if [ ! -f $TSMLOG ]; then
-  TSMLOG=$(grep SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
+  TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
 fi
 
 ###
