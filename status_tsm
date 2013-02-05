@@ -80,6 +80,22 @@ else
 	echo "$OUTPUT" >> ${LOGFILE} 2>&1
 fi
 
+
+# sanity check for common errors, error out after any of these:
+#   ANS1329S Server out of data storage space
+ERR_CHECK="ANS1329S"
+
+for ERR in $ERR_CHECK; do
+	grep -q $ERR $LOGFILE
+	
+	if [ $? = "0" ]; then
+		RETURN_CODE="FAILURE"
+		break
+	fi
+done
+
 cat ${LOGFILE} | $MAIL -s "${ME} `hostname` $RETURN_CODE `date '+%Y-%m-%d'`" $RECIPIENTS 
+
+# clean up time
 rm -f ${LOGFILE}
 
