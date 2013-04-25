@@ -85,7 +85,8 @@ fi
 #   ANS1329S Server out of data storage space
 #   ANS1030E The operating system refused a TSM request for memory allocation.
 #   ANS1301E Server detected system error
-ERR_CHECK="ANS1329S ANS1030E ANS1301E"
+#   ANS1017E Session rejected: TCP/IP connection failure
+ERR_CHECK="ANS1329S ANS1030E ANS1301E ANS1017E"
 
 for ERR in $ERR_CHECK; do
 	grep -q $ERR $LOGFILE
