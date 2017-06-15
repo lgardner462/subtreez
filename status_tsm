@@ -4,7 +4,9 @@
 NUM_DAYS=5
 
 # Who should get the email?
-RECIPIENTS="cbcl-logs@techsquare.com"
+# If blank, we use the cron output
+# if not blank, you get the added benift of the status in the subject line of the email
+RECIPIENTS=""
 
 # Path to TSM libraries (if needed)
 #export LD_LIBRARY_PATH=/opt/tivoli/tsm/client/api/bin/
@@ -142,7 +144,13 @@ if [ -z "$RETURN_CODE" ]; then
 	RETURN_CODE="SUCCESS"
 fi
 
-cat ${LOGFILE} | $MAIL -s "${ME} `hostname` $RETURN_CODE `date '+%Y-%m-%d'`" $RECIPIENTS 
+# If we don't have any email address, then we can print the output to the screen
+if [ ! "$RECEIPIENTS" ]; then
+	cat ${LOGFILE}
+else
+	# else we can email
+	cat ${LOGFILE} | $MAIL -s "${ME} `hostname` $RETURN_CODE `date '+%Y-%m-%d'`" $RECIPIENTS 
+fi
 
 # clean up time
 rm -f ${LOGFILE}
