@@ -145,7 +145,7 @@ if [ -z "$RETURN_CODE" ]; then
 fi
 
 # If we don't have any email address, then we can print the output to the screen
-if [ ! "$RECEIPIENTS" ]; then
+if [ ! "$RECIPIENTS" ]; then
 	cat ${LOGFILE}
 else
 	# else we can email
