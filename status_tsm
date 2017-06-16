@@ -6,7 +6,7 @@ NUM_DAYS=5
 # Who should get the email?
 # If blank, we use the cron output
 # if not blank, you get the added benift of the status in the subject line of the email
-RECIPIENTS=""
+RECIPIENTS="logs"
 
 # Path to TSM libraries (if needed)
 #export LD_LIBRARY_PATH=/opt/tivoli/tsm/client/api/bin/
