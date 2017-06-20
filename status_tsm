@@ -27,11 +27,12 @@ ME=$(basename $0)
 LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
 MAIL=$(which mail)
 
-if [ ! -f "$TSMLOG" ]; then
+# This should find the correct log file, other wise we'll try to use the default
+if [ "$(grep -ic ^SCHEDLOGNAME ${TSM_DIR}/dsm.sys)" == "1" ]; then
 	TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
 fi
 
-if [ -z "$TSMLOG" ]; then
+if [ ! -f "$TSMLOG" ]; then
 	# if we don't have a log skip the rest
 	echo "No logfile found"
 	exit 1
