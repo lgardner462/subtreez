@@ -18,19 +18,19 @@ DATE=`date "+%m/%d/%Y"`
 # TSM binary and log directories
 TSM_DIR=/opt/tivoli/tsm/client/ba/bin
 TSMLOG=${TSM_DIR}/dsmsched.log
-if [ ! -f $TSMLOG ]; then
-  TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
-fi
 
 ###
 ### you shouldn't need to configure anything past here
 ###
+
 ME=$(basename $0)
 LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
 MAIL=$(which mail)
 
-# errors are listed after the "STATUS END" line, but before
-# the OBJECT END line, so we include it
+if [ ! -f "$TSMLOG" ]; then
+	TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
+fi
+
 if [ -z "$TSMLOG" ]; then
 	# if we don't have a log skip the rest
 	echo "No logfile found"
@@ -42,7 +42,7 @@ fi
 STATUS=`tail -2000 $TSMLOG | \
 sed -n '/SCHEDULEREC STATUS BEGIN/,/SCHEDULEREC OBJECT END/p'`
 
-## Check to make sure we've taken a backup of our filespaces within $NUM_DAYS
+# Check to make sure we've taken a backup of our filespaces within $NUM_DAYS
 FILESPACE_COUNT="1"
 FILESPACES=$(dsmc q fi)
 FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
