@@ -98,15 +98,13 @@ else
 		if [ $count = "5" ]; then
 			cat <<-EOF >> ${LOGFILE} 2>&1
 
-			NO BACKUP STATUS FOR OVER 5 DAYS!
+			NO BACKUP STATUS!
 			
 			This may be due to a large backup.  
 			Here are the last 10 lines in the backup log:
 
-			`tail -n 10 $TSMLOG`
+			$(tail -n 10 $TSMLOG)
 			EOF
-
-			RETURN_CODE="UNKNOWN"
 
 			break
 		fi
