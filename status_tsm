@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # How many days until we consider a backup to be failed?
-NUM_DAYS=1
+NUM_DAYS=5
 
 # Who should get the email?
 # If blank, we use the cron output
