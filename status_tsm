@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # How many days until we consider a backup to be failed?
-NUM_DAYS=5
+NUM_DAYS=1
 
 # Who should get the email?
 # If blank, we use the cron output
 # if not blank, you get the added benift of the status in the subject line of the email
-RECIPIENTS="logs"
+RECIPIENTS=""
 
 # Path to TSM libraries (if needed)
 #export LD_LIBRARY_PATH=/opt/tivoli/tsm/client/api/bin/
@@ -27,6 +27,23 @@ ME=$(basename $0)
 LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
 MAIL=$(which mail)
 
+# Parse our only option (nagios)
+while [[ $# -gt 0 ]]; do
+	opt="$1"
+
+	case $opt in
+		-n|--nagios)
+    			NAGIOS=1
+			shift
+  		;;
+		*)
+			echo "Usage: $0 [-n|--nagios]"
+			exit 3
+		;;
+	esac
+	shift
+done
+
 # This should find the correct log file, other wise we'll try to use the default
 if [ "$(grep -ic ^SCHEDLOGNAME ${TSM_DIR}/dsm.sys)" == "1" ]; then
 	TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
@@ -35,7 +52,8 @@ fi
 if [ ! -f "$TSMLOG" ]; then
 	# if we don't have a log skip the rest
 	echo "No logfile found"
-	exit 1
+	# NAGIOS exit UNKNOWN
+	exit 3
 fi
 
 # if you continuously get email that says the backup has failed (but it's
@@ -74,6 +92,15 @@ until [ -z "$FILESPACE" ]; do
                 if [ $DATE_COUNT -ge $NUM_DAYS ] && [ -z "$DATE_CHECK" ]; then
                         echo "WARNING: $(echo $FILESPACE | awk '{print "("$2")\t"$NF}')" >> ${LOGFILE}
 			RETURN_CODE="WARNING"
+			if [ "$NAGIOS" == "1" ]; then
+				NAGIOS_EXIT="1"
+				if [ ! "$NAGIOS_OUTPUT" ]; then
+					NAGIOS_OUTPUT="$(echo $FILESPACE | awk '{print $NF}')"
+				else
+					NAGIOS_OUTPUT="$NAGIOS_OUTPUT\n$(echo $FILESPACE | awk '{print $NF}')"
+				fi
+					
+			fi
                 fi
         fi
 
@@ -133,6 +160,7 @@ for ERR in $ERR_CHECK; do
 	
 	if [ $? = "0" ]; then
 		RETURN_CODE="FAILURE"
+		NAGIOS_EXIT="2"
 		break
 	fi
 done
@@ -141,6 +169,18 @@ done
 # If we don't see that here, then we can assume everything was OK so far
 if [ -z "$RETURN_CODE" ]; then
 	RETURN_CODE="SUCCESS"
+	NAGIOS_EXIT="0"
+fi
+
+if [ "$NAGIOS" == "1" ]; then
+	if [ "$NAGIOS_EXIT" == "0" ]; then
+		echo "All backups OK"
+	elif [ "$NAGIOS_EXIT" == "1" ]; then
+		echo "WARNING: Backups have failures"
+		echo -e "$NAGIOS_OUTPUT"
+	fi
+
+	exit $NAGIOS_EXIT
 fi
 
 # If we don't have any email address, then we can print the output to the screen
