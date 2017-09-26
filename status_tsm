@@ -36,6 +36,10 @@ while [[ $# -gt 0 ]]; do
     			NAGIOS=1
 			shift
   		;;
+		-t|--text)
+		    RECIPIENTS=""
+		    shift
+  		;;
 		*)
 			echo "Usage: $0 [-n|--nagios]"
 			exit 3
