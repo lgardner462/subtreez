@@ -30,7 +30,7 @@ MAIL=$(which mail)
 # Parse our only option (nagios)
 while [[ $# -gt 0 ]]; do
 	opt="$1"
-
+        arg="$2"
 	case $opt in
 		-n|--nagios)
     			NAGIOS=1
@@ -40,6 +40,11 @@ while [[ $# -gt 0 ]]; do
 		    RECIPIENTS=""
 		    shift
   		;;
+                -i|--ignore)
+                        IGNORELIST="$arg"
+                        IGNORELIST=$(echo $IGNORELIST | tr ',' ' '  )
+                        shift
+                ;;
 		*)
 			echo "Usage: $0 [-n|--nagios]"
 			exit 3
@@ -72,7 +77,6 @@ FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
 
 # Until filespace is blank, increment the filespace search by 1
 until [ -z "$FILESPACE" ]; do
-
         # check for todays date in the current filespace backup
         DATE_CHECK=$(echo $FILESPACE | grep $DATE)
         if [ -n "$DATE_CHECK" ]; then
@@ -107,11 +111,16 @@ until [ -z "$FILESPACE" ]; do
 			fi
                 fi
         fi
-
         # increment the file space search count
         let FILESPACE_COUNT=FILESPACE_COUNT+1
         FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
-
+        # if new FILESPACE in IGNORELIST, skip new FILESPACE
+        for i in $(echo "$IGNORELIST");do
+        if [[ "$FILESPACE" =~ $i ]];then
+                let FILESPACE_COUNT=FILESPACE_COUNT+1
+                FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
+        fi
+        done
 done
 
 # find out if we had a backup today, and if not, continue for up to
