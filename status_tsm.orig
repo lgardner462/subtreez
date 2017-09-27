@@ -1,0 +1,104 @@
+#!/bin/bash
+
+ME=$(basename $0)
+LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
+RECIPIENTS="logs"
+MAIL=`which mail`
+
+# path to TSM libraries if needed
+#export LD_LIBRARY_PATH=/opt/tivoli/tsm/client/api/bin/
+
+# today's date in mm/dd/yyyy format
+# this is the format if "dateformat 1" is set in dsm.opt
+DATE=`date "+%m/%d/%Y"`
+
+# TSM binary and log directories
+TSM_DIR=/opt/tivoli/tsm/client/ba/bin
+TSMLOG=${TSM_DIR}/dsmsched.log
+if [ ! -f $TSMLOG ]; then
+  TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
+fi
+
+###
+### you shouldn't need to configure anything past here
+###
+
+# show what we backup
+${TSM_DIR}/dsmc QUERY FILESPACE -errorlogname=/dev/null > ${LOGFILE} 2>&1
+
+# errors are listed after the "STATUS END" line, but before
+# the OBJECT END line, so we include it
+if [ "$TSMLOG" == "" ]; then
+	# if we don't have a log skip the rest
+	echo "No logfile found"
+	exit 1
+fi
+
+# if you continuously get email that says the backup has failed (but it's
+# really still going), you can try to up the amount of lines we tail
+STATUS=`tail -2000 $TSMLOG | \
+sed -n '/SCHEDULEREC STATUS BEGIN/,/SCHEDULEREC OBJECT END/p'`
+
+# find out if we had a backup today, and if not, continue for up to
+# five days in the past
+OUTPUT=`echo "$STATUS" | grep ${DATE}`
+if [ -n "$OUTPUT" ]; then
+	echo >> ${LOGFILE} 2>&1
+	echo "$OUTPUT" >> ${LOGFILE} 2>&1
+
+	RETURN_CODE="SUCCESS"
+else
+	let count=0
+
+	while [ -z "$OUTPUT" ]; do
+		let "count += 1"
+
+		# try to find a backup for at least 5 days in the past
+		if [ $count = "5" ]; then
+			cat <<-EOF >> ${LOGFILE} 2>&1
+			NO BACKUP STATUS FOR OVER 5 DAYS!
+			
+			This may be due to a large backup.  
+			Here are the last 10 lines in the backup log:
+
+			`tail -n 10 $TSMLOG`
+			EOF
+
+			RETURN_CODE="UNKNOWN"
+
+			break
+		fi
+
+		# if we get here we found a recent backup
+		DATE=`date "+%m/%d/%Y" --date="${count} day ago"`
+		OUTPUT=`echo "$STATUS" | grep ${DATE}`
+		RETURN_CODE="SUCCESS"
+
+	done
+
+	echo >> ${LOGFILE} 2>&1
+	echo "$OUTPUT" >> ${LOGFILE} 2>&1
+fi
+
+
+# sanity check for common errors, error out after any of these:
+#   ANS1329S Server out of data storage space
+#   ANS1030E The operating system refused a TSM request for memory allocation.
+#   ANS1301E Server detected system error
+#   ANS1017E Session rejected: TCP/IP connection failure
+ERR_CHECK="ANS1329S ANS1030E ANS1301E ANS1017E"
+
+for ERR in $ERR_CHECK; do
+	grep -q $ERR $LOGFILE
+	
+	if [ $? = "0" ]; then
+		RETURN_CODE="FAILURE"
+		break
+	fi
+done
+
+cat ${LOGFILE} | $MAIL -s "${ME} `hostname` $RETURN_CODE `date '+%Y-%m-%d'`" $RECIPIENTS 
+
+# clean up time
+rm -f ${LOGFILE}
+
