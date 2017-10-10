@@ -1,9 +1,23 @@
 #!/bin/bash
 
 # How many days until we consider a backup to be failed?
-SCHEDULE=$( dsmc query schedule | grep Description | awk -F : '{print $2}' | awk '{print $1}' )
-if [ $SCHEDULE == "Weekly" ];then
-    NUM_DAYS=11
+PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' )
+DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}')
+if [[ $PERIOD == "1 week" ]];then
+    #Want to warn if more 2 weeks behind
+    TODAY=$( date +%w )
+    BACKUPDAY=$( date -d $DAYOFWEEK +%w )
+    LASTBACK=$( date -d "$DAYOFWEEK"'-fortnight ago' +%s )
+    TODAY_SEC=$(date '+%s');
+    NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
+elif [[ $PERIOD == "1 Day" ]];then
+    #Every day backup, check 5 days/backups back
+    if [ $DAYOFWEEK == "Any" ];then
+        NUM_DAYS=5
+    #Allow an extra 2 days for weekends, checks last 5 backups
+    elif [ $DAYOFWEEK == "Weekday" ];then
+        NUM_DAYS=7
+    fi
 else
     NUM_DAYS=5
 fi
