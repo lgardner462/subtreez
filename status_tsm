@@ -1,7 +1,14 @@
 #!/bin/bash
 
 # How many days until we consider a backup to be failed?
-NUM_DAYS=5
+SCHEDULE=$( dsmc query schedule | grep Description | awk -F : '{print $2}' | awk '{print $1}' )
+if [ $SCHEDULE == "Weekly" ];then
+    NUM_DAYS=11
+else
+    NUM_DAYS=5
+fi
+
+#NUM_DAYS=5
 
 # Who should get the email?
 # If blank, we use the cron output
