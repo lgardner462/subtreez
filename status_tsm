@@ -1,0 +1,230 @@
+#!/bin/bash
+
+# How many days until we consider a backup to be failed?
+PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' )
+DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}')
+if [[ $PERIOD == "1 week" ]];then
+    #Want to warn if more 2 weeks behind
+    TODAY=$( date +%w )
+    BACKUPDAY=$( date -d $DAYOFWEEK +%w )
+    LASTBACK=$( date -d "$DAYOFWEEK"'-fortnight ago' +%s )
+    TODAY_SEC=$(date '+%s');
+    NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
+elif [[ $PERIOD == "1 Day" ]];then
+    #Every day backup, check 5 days/backups back
+    if [ $DAYOFWEEK == "Any" ];then
+        NUM_DAYS=5
+    #Allow an extra 2 days for weekends, checks last 5 backups
+    elif [ $DAYOFWEEK == "Weekday" ];then
+        NUM_DAYS=7
+    fi
+else
+    NUM_DAYS=5
+fi
+
+#NUM_DAYS=5
+
+# Who should get the email?
+# If blank, we use the cron output
+# if not blank, you get the added benift of the status in the subject line of the email
+RECIPIENTS="logs"
+
+# Path to TSM libraries (if needed)
+#export LD_LIBRARY_PATH=/opt/tivoli/tsm/client/api/bin/
+
+# Today's date in mm/dd/yyyy format
+# This is the format if "dateformat 1" is set in dsm.opt
+DATE=`date "+%m/%d/%Y"`
+
+# TSM binary and log directories
+TSM_DIR=/opt/tivoli/tsm/client/ba/bin
+TSMLOG=${TSM_DIR}/dsmsched.log
+
+###
+### you shouldn't need to configure anything past here
+###
+
+ME=$(basename $0)
+LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
+MAIL=$(which mail)
+
+# Parse our only option (nagios)
+while [[ $# -gt 0 ]]; do
+	opt="$1"
+        arg="$2"
+	case $opt in
+		-n|--nagios)
+    			NAGIOS=1
+			shift
+  		;;
+		-t|--text)
+		    RECIPIENTS=""
+		    shift
+  		;;
+                -i|--ignore)
+                        IGNORELIST="$arg"
+                        IGNORELIST=$(echo $IGNORELIST | tr ',' ' '  )
+                        shift
+                ;;
+		*)
+			echo "Usage: $0 [-n|--nagios]"
+			exit 3
+		;;
+	esac
+	shift
+done
+
+# This should find the correct log file, other wise we'll try to use the default
+if [ "$(grep -ic ^SCHEDLOGNAME ${TSM_DIR}/dsm.sys)" == "1" ]; then
+	TSMLOG=$(grep -i SCHEDLOGNAME ${TSM_DIR}/dsm.sys | awk '{print $2}')
+fi
+
+if [ ! -f "$TSMLOG" ]; then
+	# if we don't have a log skip the rest
+	echo "No logfile found"
+	# NAGIOS exit UNKNOWN
+	exit 3
+fi
+
+# if you continuously get email that says the backup has failed (but it's
+# really still going), you can try to up the amount of lines we tail
+STATUS=`tail -2000 $TSMLOG | \
+sed -n '/SCHEDULEREC STATUS BEGIN/,/SCHEDULEREC OBJECT END/p'`
+
+# Check to make sure we've taken a backup of our filespaces within $NUM_DAYS
+FILESPACE_COUNT="1"
+FILESPACES=$(dsmc q fi)
+FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
+
+# Until filespace is blank, increment the filespace search by 1
+until [ -z "$FILESPACE" ]; do
+        # check for todays date in the current filespace backup
+        DATE_CHECK=$(echo $FILESPACE | grep $DATE)
+        if [ -n "$DATE_CHECK" ]; then
+                echo -e "OK:\t $(echo $FILESPACE | awk '{print "("$2")\t"$NF}')" >> ${LOGFILE}
+        else
+                # if the above fails, check for NUM_DAYS in the past
+                DATE_COUNT=0
+                DATE_CHECK=$(echo "$FILESPACE" | grep $(date "+%m/%d/%Y" --date="$DATE_COUNT days ago"))
+                while [ $DATE_COUNT -le $NUM_DAYS ]; do
+                        DATE_CHECK=$(echo "$FILESPACE" | grep $(date "+%m/%d/%Y" --date="$DATE_COUNT days ago"))
+
+                        if [ -n "$DATE_CHECK" ]; then
+                                echo -e "OK:\t $(echo $FILESPACE | awk '{print "("$2")\t"$NF}')" >> ${LOGFILE}
+                                break
+                        else
+                                let DATE_COUNT=DATE_COUNT+1
+                        fi
+                done
+
+                # we're only going to get here if the above while loop does not end in a break
+                if [ $DATE_COUNT -ge $NUM_DAYS ] && [ -z "$DATE_CHECK" ]; then
+                        echo "WARNING: $(echo $FILESPACE | awk '{print "("$2")\t"$NF}')" >> ${LOGFILE}
+			RETURN_CODE="WARNING"
+			if [ "$NAGIOS" == "1" ]; then
+				NAGIOS_EXIT="1"
+				if [ ! "$NAGIOS_OUTPUT" ]; then
+					NAGIOS_OUTPUT="$(echo $FILESPACE | awk '{print $NF}')"
+				else
+					NAGIOS_OUTPUT="$NAGIOS_OUTPUT\n$(echo $FILESPACE | awk '{print $NF}')"
+				fi
+					
+			fi
+                fi
+        fi
+        # increment the file space search count
+        let FILESPACE_COUNT=FILESPACE_COUNT+1
+        FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
+        # if new FILESPACE in IGNORELIST, skip new FILESPACE
+        for i in $(echo "$IGNORELIST");do
+        if [[ "$FILESPACE" =~ $i ]];then
+                let FILESPACE_COUNT=FILESPACE_COUNT+1
+                FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
+        fi
+        done
+done
+
+# find out if we had a backup today, and if not, continue for up to
+# five days in the past
+OUTPUT=`echo "$STATUS" | grep ${DATE}`
+if [ -n "$OUTPUT" ]; then
+	echo >> ${LOGFILE} 2>&1
+	echo "$OUTPUT" >> ${LOGFILE} 2>&1
+else
+	let count=0
+
+	while [ -z "$OUTPUT" ]; do
+		let "count += 1"
+
+		# try to find a backup for at least 5 days in the past
+		if [ $count = "5" ]; then
+			cat <<-EOF >> ${LOGFILE} 2>&1
+
+			NO BACKUP STATUS...
+			
+			This may be due to a large backup.  
+			Here are the last 10 lines in the backup log:
+
+			$(tail -n 10 $TSMLOG)
+			EOF
+
+			break
+		fi
+
+		# if we get here we found a recent backup
+		DATE=`date "+%m/%d/%Y" --date="${count} day ago"`
+		OUTPUT=`echo "$STATUS" | grep ${DATE}`
+
+	done
+
+	echo >> ${LOGFILE} 2>&1
+	echo "$OUTPUT" >> ${LOGFILE} 2>&1
+fi
+
+
+# sanity check for common errors, error out after any of these:
+#   ANS1329S Server out of data storage space
+#   ANS1030E The operating system refused a TSM request for memory allocation.
+#   ANS1301E Server detected system error
+#   ANS1017E Session rejected: TCP/IP connection failure
+ERR_CHECK="ANS1329S ANS1030E ANS1301E ANS1017E"
+
+for ERR in $ERR_CHECK; do
+	grep -q $ERR $LOGFILE
+	
+	if [ $? = "0" ]; then
+		RETURN_CODE="FAILURE"
+		NAGIOS_EXIT="2"
+		break
+	fi
+done
+
+# We only set the RETURN_CODE above during a WARNING or FAILURE
+# If we don't see that here, then we can assume everything was OK so far
+if [ -z "$RETURN_CODE" ]; then
+	RETURN_CODE="SUCCESS"
+	NAGIOS_EXIT="0"
+fi
+
+if [ "$NAGIOS" == "1" ]; then
+	if [ "$NAGIOS_EXIT" == "0" ]; then
+		echo "All backups OK"
+	elif [ "$NAGIOS_EXIT" == "1" ]; then
+		echo "WARNING: Backups have failures"
+		echo -e "$NAGIOS_OUTPUT"
+	fi
+
+	exit $NAGIOS_EXIT
+fi
+
+# If we don't have any email address, then we can print the output to the screen
+if [ ! "$RECIPIENTS" ]; then
+	cat ${LOGFILE}
+else
+	# else we can email
+	cat ${LOGFILE} | $MAIL -s "${ME} `hostname` $RETURN_CODE `date '+%Y-%m-%d'`" $RECIPIENTS 
+fi
+
+# clean up time
+rm -f ${LOGFILE}
+
