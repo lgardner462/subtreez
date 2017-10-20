@@ -1,29 +1,5 @@
 #!/bin/bash
 
-# How many days until we consider a backup to be failed?
-PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' )
-DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}')
-if [[ $PERIOD == "1 week" ]];then
-    #Want to warn if more 2 weeks behind
-    TODAY=$( date +%w )
-    BACKUPDAY=$( date -d $DAYOFWEEK +%w )
-    LASTBACK=$( date -d "$DAYOFWEEK"'-fortnight ago' +%s )
-    TODAY_SEC=$(date '+%s');
-    NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
-elif [[ $PERIOD == "1 Day" ]];then
-    #Every day backup, check 5 days/backups back
-    if [ $DAYOFWEEK == "Any" ];then
-        NUM_DAYS=5
-    #Allow an extra 2 days for weekends, checks last 5 backups
-    elif [ $DAYOFWEEK == "Weekday" ];then
-        NUM_DAYS=7
-    fi
-else
-    NUM_DAYS=5
-fi
-
-#NUM_DAYS=5
-
 # Who should get the email?
 # If blank, we use the cron output
 # if not blank, you get the added benift of the status in the subject line of the email
@@ -91,6 +67,28 @@ fi
 STATUS=`tail -2000 $TSMLOG | \
 sed -n '/SCHEDULEREC STATUS BEGIN/,/SCHEDULEREC OBJECT END/p'`
 
+# How many days until we consider a backup to be failed?
+PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' )
+DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}')
+if [[ $(echo $PERIOD | grep "Week" | wc -l) -ge 1 ]];then
+    #Want to warn if more 2 weeks behind
+    TODAY=$( date +%w )
+    BACKUPDAY=$( date -d $DAYOFWEEK +%w )
+    LASTBACK=$( date -d "$DAYOFWEEK"'-fortnight ago' +%s )
+    TODAY_SEC=$(date '+%s');
+    NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
+elif [[ $(echo $PERIOD | grep "1 Day" | wc -l ) -ge 1 ]];then
+    #Every day backup, check 5 days/backups back
+    if [ $DAYOFWEEK == "Any" ];then
+        NUM_DAYS=5
+    #Allow an extra 2 days for weekends, checks last 5 backups
+    elif [ $DAYOFWEEK == "Weekday" ];then
+        NUM_DAYS=7
+    fi
+else
+    NUM_DAYS=5
+fi
+
 # Check to make sure we've taken a backup of our filespaces within $NUM_DAYS
 FILESPACE_COUNT="1"
 FILESPACES=$(dsmc q fi)
@@ -116,7 +114,6 @@ until [ -z "$FILESPACE" ]; do
                                 let DATE_COUNT=DATE_COUNT+1
                         fi
                 done
-
                 # we're only going to get here if the above while loop does not end in a break
                 if [ $DATE_COUNT -ge $NUM_DAYS ] && [ -z "$DATE_CHECK" ]; then
                         echo "WARNING: $(echo $FILESPACE | awk '{print "("$2")\t"$NF}')" >> ${LOGFILE}
@@ -227,4 +224,5 @@ fi
 
 # clean up time
 rm -f ${LOGFILE}
+
 
