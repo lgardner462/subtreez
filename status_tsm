@@ -103,7 +103,7 @@ fi
 # Check to make sure we've taken a backup of our filespaces within $NUM_DAYS
 FILESPACE_COUNT="1"
 FILESPACES=$(dsmc q fi)
-FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
+FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}[[:space:]]")
 
 # Until filespace is blank, increment the filespace search by 1
 until [ -z "$FILESPACE" ]; do
