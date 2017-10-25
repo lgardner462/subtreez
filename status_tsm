@@ -22,6 +22,7 @@ TSMLOG=${TSM_DIR}/dsmsched.log
 
 ME=$(basename $0)
 LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
+echo "" >> $LOGFILE
 MAIL=$(which mail)
 
 # Parse our only option (nagios)
@@ -68,22 +69,32 @@ STATUS=`tail -2000 $TSMLOG | \
 sed -n '/SCHEDULEREC STATUS BEGIN/,/SCHEDULEREC OBJECT END/p'`
 
 # How many days until we consider a backup to be failed?
-PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' )
-DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}')
-if [[ $(echo $PERIOD | grep "Week" | wc -l) -ge 1 ]];then
-    #Want to warn if more 2 weeks behind
-    TODAY=$( date +%w )
-    BACKUPDAY=$( date -d $DAYOFWEEK +%w )
-    LASTBACK=$( date -d "$DAYOFWEEK"'-fortnight ago' +%s )
-    TODAY_SEC=$(date '+%s');
-    NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
+# options
+# PERIOD = 
+#    "1 Day"
+#    "1 Week"
+# Day of week =
+#    "Any" - 7 days/week
+#    "Weekday" - 5 days/week
+#    "Mon/Tue/etc" - 1 day/week
+#
+PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' | sed 's/^ //' )
+DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}' | sed 's/^ //')
+if [[ "$PERIOD" == "1 Week" ]];then
+    # Want to warn if more 2 weeks behind
+    # TODAY=$( date +%w )
+    # BACKUPDAY=$( date -d $DAYOFWEEK +%w )
+    # LASTBACK=$( date -d "$DAYOFWEEK"'-fortnight ago' +%s )
+    # TODAY_SEC=$(date '+%s');
+    # NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
+    NUM_DAYS=9
 elif [[ $(echo $PERIOD | grep "1 Day" | wc -l ) -ge 1 ]];then
     #Every day backup, check 5 days/backups back
     if [ $DAYOFWEEK == "Any" ];then
-        NUM_DAYS=5
+        NUM_DAYS=2
     #Allow an extra 2 days for weekends, checks last 5 backups
     elif [ $DAYOFWEEK == "Weekday" ];then
-        NUM_DAYS=7
+        NUM_DAYS=4
     fi
 else
     NUM_DAYS=5
