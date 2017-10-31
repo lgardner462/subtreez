@@ -103,6 +103,7 @@ until [ -z "$FILESPACE" ]; do
         MOUNT="|$(echo $FILESPACE | awk '{print $NF}')|"
         # echo checking $MOUNT vs $IGNORELIST $FILESPACE
         if [ -z "${IGNORELIST##*$MOUNT*}" ]; then
+                echo -e "IGNORED:\t $(echo $FILESPACE | awk '{print "("$2")\t"$NF}')" >> ${LOGFILE}
                 let FILESPACE_COUNT=FILESPACE_COUNT+1
                 FILESPACE=$(echo "$FILESPACES" | grep "^[[:space:]]*${FILESPACE_COUNT}")
 		continue
