@@ -25,30 +25,21 @@ LOGFILE=$(mktemp /tmp/${ME}.XXXXX)
 echo "" >> $LOGFILE
 MAIL=$(which mail)
 
-# Parse our only option (nagios)
-while [[ $# -gt 0 ]]; do
-	opt="$1"
-        arg="$2"
-	case $opt in
-		-n|--nagios)
-    			NAGIOS=1
-			shift
-  		;;
-		-t|--text)
-		    RECIPIENTS=""
-		    shift
-  		;;
-                -i|--ignore)
-                        IGNORELIST="$arg"
-                        IGNORELIST=$(echo $IGNORELIST | tr ',' ' '  )
-                        shift
-                ;;
-		*)
-			echo "Usage: $0 [-n|--nagios]"
-			exit 3
-		;;
-	esac
-	shift
+#
+# ripped from https://stackoverflow.com/questions/402377/using-getopts-in-bash-shell-script-to-get-long-and-short-command-line-options
+#
+TEMP=`getopt -o nti: --long nagios,text,ignore: -n 'status_tsm' -- "$@"`
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+eval set -- "$TEMP"
+
+while true; do
+    case "$1" in
+	-n | --nagios ) NAGIOS=1; shift ;;
+        -t | --text ) RECIPIENTS=""; shift ;;
+	-i | --ignore ) IGNORELIST=$(echo $2 | tr ',' ' '); shift 2 ;;
+	-- ) shift; break ;;
+	* ) echo "Usage: $0 [-n|--nagios] [-i|--ignore comma sep list] [-t|--text]" ; exit 3 ;;
+    esac
 done
 
 # This should find the correct log file, other wise we'll try to use the default
