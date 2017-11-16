@@ -69,9 +69,9 @@ sed -n '/SCHEDULEREC STATUS BEGIN/,/SCHEDULEREC OBJECT END/p'`
 #    "Weekday" - 5 days/week
 #    "Mon/Tue/etc" - 1 day/week
 #
-PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' | sed 's/^ //' )
+PERIOD=$(dsmc q sched | grep Period | awk -F : '{print $2}' | sed 's/ //g' )
 DAYOFWEEK=$(dsmc q sched | grep "Day of Week" | awk -F : '{print $2}' | sed 's/^ //')
-if [[ "$PERIOD" == "1 Week" ]];then
+if [[ "$PERIOD" == "1Week" ]];then
     # Want to warn if more 2 weeks behind
     # TODAY=$( date +%w )
     # BACKUPDAY=$( date -d $DAYOFWEEK +%w )
@@ -79,7 +79,7 @@ if [[ "$PERIOD" == "1 Week" ]];then
     # TODAY_SEC=$(date '+%s');
     # NUM_DAYS=$(( ( TODAY_SEC - LASTBACK ) / (60*60*24) ))
     NUM_DAYS=9
-elif [[ $(echo $PERIOD | grep "1 Day" | wc -l ) -ge 1 ]];then
+elif [[ $(echo $PERIOD | grep "1Day" | wc -l ) -ge 1 ]];then
     #Every day backup, check 5 days/backups back
     if [ $DAYOFWEEK == "Any" ];then
         NUM_DAYS=2
