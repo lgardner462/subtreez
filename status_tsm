@@ -200,6 +200,7 @@ for ERR in $ERR_CHECK; do
 	if [ $? = "0" ]; then
 		RETURN_CODE="FAILURE"
 		NAGIOS_EXIT="2"
+		NAGIOS_OUTPUT="$NAGIOS_OUTPUT $ERR"
 		break
 	fi
 done
@@ -215,6 +216,9 @@ if [ "$NAGIOS" == "1" ]; then
 	if [ "$NAGIOS_EXIT" == "0" ]; then
 		echo "All backups OK"
 	elif [ "$NAGIOS_EXIT" == "1" ]; then
+		echo "WARNING: Backups have failures"
+		echo -e "$NAGIOS_OUTPUT"
+	elif [ "$NAGIOS_EXIT" == "2" ]; then
 		echo "WARNING: Backups have failures"
 		echo -e "$NAGIOS_OUTPUT"
 	fi
