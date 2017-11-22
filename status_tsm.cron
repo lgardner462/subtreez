@@ -1,1 +1,2 @@
-0 6 * * 1-5 /path/to/status_tsm
+# matt 0 6 * * 1-5 root /path/to/status_tsm
+# sb 0 4 * * * root /root/git/status_tsm/status_tsm
