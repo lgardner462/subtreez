@@ -1,0 +1,44 @@
+#!/bin/bash
+
+top_level=$1
+until [[ valid_file -gt 0 ]];do
+#    user_dir=$1
+    user_name=$( ls $top_level | shuf -n 1)
+    user_dir=$top_level"/"$user_name
+    user_all=$( find $user_dir -maxdepth 2 | shuf -zn 200 | xargs -0 | sed 's/ /\n/g');
+    for i in $user_all;do
+            if [[ -f $i ]];then
+                #Check if file is > 10 days old
+                #backup_date=$(dsmc q b "$i" | grep "$i" | awk '{print $3}'  )
+                file_date=$(stat $i | grep Modify | awk '{print $2}')
+                #echo $backup_date
+                file_sec=$( date -d $file_date +%s)
+                now_sec=$(date +%s)
+                DAYS_PAST=$(echo $(($(( $now_sec - $file_sec )) / 60 / 60 / 24 )) )
+                echo "file is from " $DAYS_PAST " days ago."
+           #    #DAYS_PAST=$(echo $( echo $now_sec - $file_sec | bc ) / 60 / 60 / 24 | bc )
+            fi
+            if [[ $DAYS_PAST -gt 10 ]];then
+                valid_file=1
+                FILE_NAME=$i
+                break
+            fi
+    done
+done
+echo "checking "$FILE_NAME
+echo "File is from $DAYS_PAST days ago"
+#RANDOM_FILE=/backup/home/lgardner462/rule1
+echo "This is where we dsmc restore the file to restore_test"
+echo "running..."
+echo -e "\n\n dsmc restore $FILE_NAME restore_test"
+dsmc restore $FILE_NAME ./restore_test
+echo "verifying md5sums for $FILE_NAME and restore_test..."
+md1=$(md5sum restore_test | awk '{print $1}')
+md2=$(md5sum $FILE_NAME | awk '{print $1}')
+if [[ "$md1" == "$md2" ]];then
+  echo "md5 is same for both files"
+else
+  echo "md5sums differ between the files"
+fi
+rm restore_test
+
